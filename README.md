@@ -87,3 +87,109 @@ Em cũng phát hiện lúc test bằng Postman, nếu gọi API mà không có h
 Giả định của em: chưa cần thêm authentication cho API liệt kê hay rate limiting cho API nhận form, vì đề không bắt buộc ở Phần B, với lại Phần A em cũng đã nói sẽ không làm vội hai việc này trong ngày đầu tiên. Và chỉ có đúng 4 trạng thái `new`, `contacted`, `booked`, `closed` như đề bài nêu, không có trạng thái nào khác.
 
 ## PART C A production incident
+
+Chào anh/chị,
+
+Em vừa nghe Sales báo lại sáng nay và đang trực tiếp kiểm tra ngay. Em xin phép chưa kết luận nguyên nhân vội, vì em mới vào công ty được hai tuần và chưa đọc hết code của module này.
+
+Việc đầu tiên em làm là tự tay submit thử một form giống khách hàng, xem dữ liệu có lưu vào database không. Song song đó em check thẳng database xem ba ngày qua thực tế có bao nhiêu yêu cầu tư vấn được lưu lại, rồi đối chiếu với những gì Sales đang thấy trên hệ thống của mình.
+
+Nếu database có đủ data mà Sales không thấy, thì lỗi nằm ở phía hệ thống hiển thị cho Sales, không phải ở form. Còn nếu database thiếu hoặc trống, thì đúng là form đang có vấn đề thật. Em cần biết chắc cái này trước khi nói hướng sửa và không muốn đoán mò. Em cũng đang thử liên hệ lại bạn dev cũ dù hiện tại chưa liên hệ được.
+
+Em sẽ gửi update cho anh/chị trước 11 giờ sáng nay, nói rõ nguyên nhân là gì và hướng xử lý. Em sẽ ưu tiên xử lý việc này trước mọi việc khác trong hôm nay.
+
+## PART D Your background and self-review
+
+### D.1 A system you have built
+
+#### 1. What the system does, functionally
+
+Hệ thống website Ecommerce Vua Nệm. Chức năng chính của hệ thống là listing những sản phẩm của công ty trên website, thu sales lead, thanh toán online.
+
+URL: https://vuanem.com
+
+#### 2. Which part you were personally responsible for
+
+Hầu như tất cả các phần trên website này em là người chịu trách nhiệm chính vì website đã từng đập đi xây lại từ đầu. Trong team thời điểm đó có thêm một bạn hỗ trợ thêm phần Frontend còn lại cả Frontend + Backend + System & Technical Lead em đều đảm nhiệm. 
+
+#### 3. The most important technical decision you made
+
+- Quyết định kỹ thuật quan trọng nhất có lẽ là việc tách project monolith hiện tại ra thành một số micro service nhỏ hơn.
+
+- Thêm các giải pháp để xử lý traffic lớn (cache, queue, CDN) cho mỗi mùa Sale
+
+#### 4. The hardest problem you hit once it was running in production
+
+- Downtime lúc traffic tăng đột biến (flash sale, ads đổ vào)
+- Bug âm thầm gây mất data hoặc sai lead khách hàng trên những form thu lead của các Landing Page
+
+#### 5. One decision you would make differently if you did it again
+
+Xây dựng đủ test, triển khai đủ monitoring để phát hiện lỗi và có phương án xử lý lỗi sớm nhất
+
+#### Sơ đồ kiến trúc đơn giản
+
+```mermaid
+flowchart TB
+    Customer[Khách hàng - Web/Mobile Browser]
+
+    subgraph Frontend
+        Web[Website Vua Nệm]
+    end
+
+    subgraph Backend
+        API[API Server]
+        Category[Category / Product]
+        Cart[Giỏ hàng]
+        Checkout[Checkout / Đơn hàng]
+        Auth[Đăng nhập bằng SĐT]
+        Showroom[Tra cứu Showroom]
+    end
+
+    subgraph External[Dịch vụ bên ngoài]
+        SMS[SMS Provider - gửi OTP]
+        Payment[Cổng thanh toán]
+        CRM[CRM / Contact Center]
+        Zalo[Zalo OA]
+        Email[Email Service]
+    end
+
+    Cache[(Redis Cache)]
+    Queue[(Queue)]
+    DB[(Database)]
+
+    Customer --> Web
+    Web --> API
+    API --> Category
+    API --> Cart
+    API --> Checkout
+    API --> Auth
+    API --> Showroom
+
+    Category --> Cache
+    Cart --> Cache
+    Cache --> DB
+    Checkout --> DB
+    Checkout --> Payment
+    Showroom --> Cache
+
+    Auth -->|gửi OTP| Queue
+    Auth -->|OTP thành công| Queue
+    Checkout -->|Checkout thành công| Queue
+    Queue -->|gửi SMS OTP| SMS
+    Queue -->|bắn lead| CRM
+    Queue -->|gửi Zalo OA| Zalo
+    Queue -->|gửi email xác nhận đơn hàng| Email
+```
+
+### D.2 Reviewing your own submission
+
+Em tự tin nhất ở Phần B, vì logic nghiệp vụ quan trọng nhất là không cho khách hàng tự set status và chỉ cho phép đúng 4 transition, em đã kiểm tra kỹ bằng test tự động chạy pass hết nên chắc chắn đúng yêu cầu.
+
+Em kém tự tin nhất ở D.1 vì đây là nhớ lại một hệ thống em từng làm cách đây một thời gian và không có tài liệu gốc để đối chiếu lại nên một số chi tiết như luồng cache hay queue em mô tả theo trí nhớ và có thể không khớp 100% với thực tế lúc đó.
+
+Nếu có thêm hai giờ, em sẽ dùng để làm hai việc đã nêu ở A.1 nhưng chưa làm trong Phần B: thêm authentication cho API liệt kê enquiry, và thêm rate limiting cho API nhận form, để giải pháp hoàn thiện hơn chứ không chỉ dừng ở đúng yêu cầu bắt buộc.
+
+### D.3 Your questions
+
+Hiện em đã hết câu hỏi. Mọi thắc mắc đã được giải đáp ở buổi phỏng vấn.
