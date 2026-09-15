@@ -58,7 +58,32 @@ Nếu đây là ngày đầu tiên của em ở Wayfinder và em có một ngày
 
 ### B.1 The public form: Make the endpoint that receives submissions from the public form accept only data that is valid and safe to store.
 
+Em thêm một Form Request tên `StoreEnquiryRequest` để validate trước khi tạo enquiry, không còn dùng `request->all()` như code cũ. `tour_id`, `name`, `email` là bắt buộc, `tour_id` phải tồn tại trong bảng `tours`, `email` phải đúng định dạng. `phone`, `preferred_month`, `message` để nullable theo đúng migration gốc.
+
+`status` thì em không đưa vào rule validate luôn, nên khách hàng có gửi `status` lên hay không cũng không quan trọng, giá trị đó không bao giờ được dùng tới. Enquiry mới tạo ra luôn có `status` là `new`, gán cứng trong controller.
+
 ### B.2 Status update endpoint
+
+Em thêm route `PATCH /api/enquiries/{enquiry}/status`, xử lý trong hàm `updateStatus` của `EnquiryController`. Danh sách trạng thái hợp lệ và các cặp chuyển trạng thái được phép em đưa vào 2 hằng số trong model `TourEnquiry` là `STATUSES` và `ALLOWED_STATUS_TRANSITIONS`, kèm một hàm `canTransitionTo` để kiểm tra.
+
+Gửi `status` sai, không nằm trong 4 giá trị `new`, `contacted`, `booked`, `closed` thì bị chặn ngay ở bước validate. Còn giá trị đúng nhưng chuyển sai thứ tự, ví dụ đang `new` mà nhảy thẳng sang `booked`, thì trả về lỗi `422` kèm message nói rõ không chuyển được từ đâu sang đâu, `status` trong DB giữ nguyên không đổi.
 
 ### B.3 Automated tests
 
+Em viết 8 test trong `tests/Feature/EnquiryTest.php`, trong đó chọn 2 hành vi quan trọng nhất để giải thích ở đây.
+
+Cái đầu tiên là khách hàng không thể tự set `status` khi gửi form, dù gửi giá trị gì lên cũng vậy. Đây là lỗi nặng nhất trong code gốc, nên em muốn có test giữ hành vi này lại, để sau này lỡ ai sửa code mà quay về cách cũ thì test sẽ báo lỗi ngay, không phải đợi phát hiện ngoài production.
+
+Cái thứ hai là chuyển trạng thái sai thứ tự phải bị từ chối và `status` trong DB không được đổi. Đây là quy tắc nghiệp vụ chính của cả module, sai chỗ này thì một enquiry có thể nhảy thẳng từ `new` sang `closed`, bỏ qua luôn bước Sales liên hệ khách hàng.
+
+Ngoài 2 cái này em test thêm các case còn lại theo đúng yêu cầu bắt buộc của đề: thiếu field, email sai định dạng, `tour_id` không tồn tại, chuyển trạng thái đúng thì thành công, và list enquiry trả về đúng kèm tên tour.
+
+### Các thay đổi bổ sung và giả định
+
+Em sửa thêm chỗ N+1 query ở API liệt kê enquiry, code cũ lấy tên tour trong vòng `foreach` nên mỗi enquiry tốn thêm một query riêng. Em thêm `with('tour')` là xong, không đổi gì khác về logic hay dữ liệu trả về.
+
+Em cũng phát hiện lúc test bằng Postman, nếu gọi API mà không có header `Accept: application/json` thì Laravel không nhận request đó là gọi API, dẫn đến khi validate lỗi nó redirect về trang chủ và trả ra HTML thay vì JSON. Em sửa bằng cách thêm `shouldRenderJsonWhen` trong `bootstrap/app.php`, ép mọi request vào `api/*` luôn trả JSON dù client có gửi `Accept` header hay không, và có viết thêm 1 test cho hành vi này.
+
+Giả định của em: chưa cần thêm authentication cho API liệt kê hay rate limiting cho API nhận form, vì đề không bắt buộc ở Phần B, với lại Phần A em cũng đã nói sẽ không làm vội hai việc này trong ngày đầu tiên. Và chỉ có đúng 4 trạng thái `new`, `contacted`, `booked`, `closed` như đề bài nêu, không có trạng thái nào khác.
+
+## PART C A production incident
