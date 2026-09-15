@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 
 class EnquiryController extends Controller
 {
-    // Dashboard cho nhân viên: liệt kê toàn bộ enquiry kèm tên tour
+    // Staff dashboard: list all enquiries with the tour name
     public function index()
     {
         $enquiries = TourEnquiry::all();
@@ -24,7 +24,7 @@ class EnquiryController extends Controller
         return response()->json($result);
     }
 
-    // Tiếp nhận submit từ form công khai
+    // Public enquiry form submission
     public function store(Request $request)
     {
         $enquiry = TourEnquiry::create($request->all());
